@@ -1,5 +1,6 @@
 # Cybersecurity Coding Project – Phishing URL Detector (Phase 3 with Scoring System + Flask Web App + Real API Check)
 # This version adds a web interface using Flask and checks reputation using the IPQualityScore API
+# Renamed to app.py
 
 import re
 import requests
