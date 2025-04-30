@@ -5,7 +5,8 @@ from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
-IPQS_API_KEY = "your_ipqualityscore_api_key"  # Replace with your real key
+IPQS_API_KEY = "j1Kn3vGWqMhjk60Wf7Sgs79GDTcpVvcl"
+  # Replace with your real key
 
 # List of suspicious top-level domains
 SUSPICIOUS_TLDS = ['.win', '.tk', '.cn', '.gq', '.ml', '.cf', '.ga']
