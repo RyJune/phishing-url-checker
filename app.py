@@ -61,7 +61,7 @@ def index():
         url = request.form['url'].strip()
         manual_flags = custom_phishing_rules(url)
         api_result = check_with_ipqualityscore(url)
-	print(api_result)
+        print(api_result)
 
 
         is_phishing = api_result.get("unsafe", False) or bool(manual_flags)
