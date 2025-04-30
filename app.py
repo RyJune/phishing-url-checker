@@ -1,86 +1,78 @@
-# Cybersecurity Coding Project – Phishing URL Detector (Phase 3 with Scoring System + Flask Web App + Real API Check)
-# This version adds a web interface using Flask and checks reputation using the IPQualityScore API
-# Renamed to app.py
-
-
- import re
+import re
 import requests
 from urllib.parse import urlparse
-import whois
-import datetime
-import os
 from flask import Flask, request, render_template
 
 app = Flask(__name__)
 
-IPQS_API_KEY = os.getenv("IPQS_API_KEY")  # Read API key from environment variable
+IPQS_API_KEY = "your_ipqualityscore_api_key"  # Replace with your real key
 
-SUSPICIOUS_TLDS = ['.win', '.top', '.xyz', '.click', '.link', '.club', '.info', '.icu']
-KNOWN_BRANDS = ['ezpass', 'paypal', 'amazon', 'bankofamerica', 'chase', 'dhl']
+# List of suspicious top-level domains
+SUSPICIOUS_TLDS = ['.win', '.tk', '.cn', '.gq', '.ml', '.cf', '.ga']
 
-def check_ipqs(url):
-    response = requests.get(
-        f"https://ipqualityscore.com/api/json/url/{IPQS_API_KEY}/{url}"
-    )
-    if response.ok:
-        data = response.json()
-        if data.get('unsafe'):
-            return "Phishing Detected (IPQualityScore)"
-    return None
+# Suspicious patterns often used in phishing
+SUSPICIOUS_PATTERNS = ['login', 'secure', 'verify', 'update', 'billing', 'ezpass', 'paypal']
 
-def check_domain_age(url):
-    try:
-        domain = urlparse(url).netloc
-        info = whois.whois(domain)
-        creation_date = info.creation_date
-        if isinstance(creation_date, list):
-            creation_date = creation_date[0]
-        if not creation_date:
-            return None
-        age_days = (datetime.datetime.now() - creation_date).days
-        if age_days < 90:
-            return "Suspicious: Domain is newly registered"
-    except:
-        return "Unable to verify domain age"
-    return None
+# Brand impersonation examples (expand this list based on targets)
+KNOWN_BRANDS = ['ezpass', 'paypal', 'apple', 'amazon', 'microsoft', 'google']
 
-def check_suspicious_tld(url):
-    parsed = urlparse(url)
-    for tld in SUSPICIOUS_TLDS:
-        if parsed.netloc.endswith(tld):
-            return f"Suspicious TLD detected: {tld}"
-    return None
+def custom_phishing_rules(url):
+    parsed_url = urlparse(url)
+    domain = parsed_url.netloc.lower()
 
-def check_brand_mimic(url):
-    domain = urlparse(url).netloc.lower()
-    for brand in KNOWN_BRANDS:
-        if brand in domain and not domain.startswith(brand):
-            return f"Possible brand impersonation: {brand}"
-    return None
-
-def overall_check(url):
     reasons = []
 
-    for check_func in [check_ipqs, check_domain_age, check_suspicious_tld, check_brand_mimic]:
-        result = check_func(url)
-        if result:
-            reasons.append(result)
+    # Rule 1: Suspicious TLD
+    for tld in SUSPICIOUS_TLDS:
+        if domain.endswith(tld):
+            reasons.append(f"Suspicious TLD: {tld}")
 
-    if not reasons:
-        return "Safe", []
-    else:
-        return "Suspicious / Phishing", reasons
+    # Rule 2: Brand impersonation (not exact match)
+    for brand in KNOWN_BRANDS:
+        if brand in domain and not domain.endswith(f"{brand}.com"):
+            reasons.append(f"Potential brand impersonation: {brand}")
 
-@app.route("/", methods=["GET", "POST"])
-def home():
-    status = None
-    details = []
-    if request.method == "POST":
-        url = request.form["url"]
-        status, details = overall_check(url)
-    return render_template("index.html", status=status, details=details)
+    # Rule 3: Hyphenated or numeric domains
+    if re.search(r"\d", domain) or "-" in domain:
+        reasons.append("Contains digits or hyphens (common in fake domains)")
 
-if __name__ == "__main__":
+    # Rule 4: Suspicious path words
+    if any(keyword in parsed_url.path.lower() for keyword in SUSPICIOUS_PATTERNS):
+        reasons.append("Suspicious keywords in URL path")
+
+    return reasons
+
+def check_with_ipqualityscore(url):
+    api_url = f"https://ipqualityscore.com/api/json/url/{IPQS_API_KEY}/{url}"
+    try:
+        response = requests.get(api_url)
+        data = response.json()
+        return data
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    result = None
+    url = ""
+
+    if request.method == 'POST':
+        url = request.form['url'].strip()
+        manual_flags = custom_phishing_rules(url)
+        api_result = check_with_ipqualityscore(url)
+
+        is_phishing = api_result.get("unsafe", False) or bool(manual_flags)
+
+        result = {
+            "input_url": url,
+            "phishing_detected": is_phishing,
+            "manual_reasons": manual_flags,
+            "api_score": api_result.get("risk_score", "N/A"),
+            "api_unsafe": api_result.get("unsafe", "N/A"),
+            "api_domain": api_result.get("domain", "N/A")
+        }
+
+    return render_template('index.html', result=result)
+
+if __name__ == '__main__':
     app.run(debug=True)
-
-
